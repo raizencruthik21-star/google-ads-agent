@@ -170,4 +170,11 @@ When a task involves a tool a non-coder wouldn't know (Google Cloud Console, Ver
 
 ## My setup
 
+- Connected: 14 October 2026
+- Login reaches: manager account Restoration Growth · 9644271246 · about 180 client accounts under it
+- Cloud project: subtle-arcade-511422-n4
+- Access level: at least Explorer (live accounts read fine) - Basic not yet confirmed
+- App published: yes - In production, External, confirmed 14 October 2026
+- GOOGLE_ADS_CUSTOMER_ID: not set yet, a client account is picked per run
+
 <!-- Commands record what is connected here - the account name and ID, the Cloud project, the access level, the site URL, the webhook and tag being on file, each landing page's TRACKING VERIFIED block - so nothing gets asked twice. Never a secret. -->

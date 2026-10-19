@@ -1,0 +1,50 @@
+# Twice-daily search terms digest to Slack. Read-only: nothing is negated.
+# Secrets needed (repo Settings > Secrets and variables > Actions):
+#   GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REFRESH_TOKEN,
+#   GOOGLE_ADS_REFRESH_TOKEN_MCC, SLACK_WEBHOOK_URL, DIGEST_ACCOUNTS (the accounts JSON)
+name: search-terms-digest
+on:
+  schedule:
+    # 8:07am and 4:07pm US Eastern. GitHub runs on UTC, so each slot has a summer and a winter
+    # line, and the gate job skips the one that does not match today's clock.
+    - cron: "7 12 * * *"   # 8am summer
+    - cron: "7 13 * * *"   # 8am winter
+    - cron: "7 20 * * *"   # 4pm summer
+    - cron: "7 21 * * *"   # 4pm winter
+  workflow_dispatch: {}
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+    steps:
+      - id: check
+        run: |
+          off=$(TZ=America/New_York date +%z)
+          case "${{ github.event.schedule }}|$off" in
+            "|"*|"7 12 * * *|-0400"|"7 20 * * *|-0400"|"7 13 * * *|-0500"|"7 21 * * *|-0500") echo "go=yes" >> "$GITHUB_OUTPUT";;
+            *) echo "go=no" >> "$GITHUB_OUTPUT"; echo "not this slot today";;
+          esac
+  digest:
+    needs: gate
+    if: needs.gate.outputs.go == 'yes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Write the accounts file
+        run: mkdir -p code/cache && printf '%s' "$DIGEST_ACCOUNTS" > code/cache/digest-accounts.json
+        env:
+          DIGEST_ACCOUNTS: ${{ secrets.DIGEST_ACCOUNTS }}
+      - name: Post the digest
+        run: python3 code/search_terms_digest.py
+        env:
+          GOOGLE_ADS_CLIENT_ID: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+          GOOGLE_ADS_CLIENT_SECRET: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+          GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          GOOGLE_ADS_REFRESH_TOKEN_MCC: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN_MCC }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _common import load_client  # noqa: E402
 from google.ads.googleads.errors import GoogleAdsException  # noqa: E402
 
-LINE = re.compile(r"^\s*(\d{10})\s+(.+?)\s*(?:#.*)?$")
+LINE = re.compile(r"^\s*(\d{6,})\s+(.+?)\s*(?:#.*)?$")  # campaign IDs are 10-12 digits
 
 
 def parse_term(raw):

@@ -41,3 +41,9 @@ code/cache/
 /stem-metrics.csv
 /context/ads-live.md
 /website/public/photos/
+
+# client audit reports - client data, never committed
+audits/
+
+# client negative uploads - client data, never committed
+negatives_to_upload.csv
