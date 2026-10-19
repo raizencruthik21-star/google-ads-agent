@@ -1,0 +1,45 @@
+# Ad check to Slack every second Monday at 9:07am US Eastern. Read-only: nothing is changed.
+# Uses the same secrets as search-terms-digest.yml.
+name: ad-check
+on:
+  schedule:
+    - cron: "7 13 * * 1"   # Monday 9am summer
+    - cron: "7 14 * * 1"   # Monday 9am winter
+  workflow_dispatch: {}
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+    steps:
+      - id: check
+        run: |
+          off=$(TZ=America/New_York date +%z)
+          week=$(( 10#$(date +%V) % 2 ))
+          case "${{ github.event.schedule }}|$off|$week" in
+            "|"*|"7 13 * * 1|-0400|0"|"7 14 * * 1|-0500|0") echo "go=yes" >> "$GITHUB_OUTPUT";;
+            *) echo "go=no" >> "$GITHUB_OUTPUT"; echo "not this slot or not this week";;
+          esac
+  check:
+    needs: gate
+    if: needs.gate.outputs.go == 'yes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Write the accounts file
+        run: mkdir -p code/cache && printf '%s' "$DIGEST_ACCOUNTS" > code/cache/digest-accounts.json
+        env:
+          DIGEST_ACCOUNTS: ${{ secrets.DIGEST_ACCOUNTS }}
+      - name: Post the ad check
+        run: python3 code/rsa_report.py
+        env:
+          GOOGLE_ADS_CLIENT_ID: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+          GOOGLE_ADS_CLIENT_SECRET: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+          GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          GOOGLE_ADS_REFRESH_TOKEN_MCC: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN_MCC }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
