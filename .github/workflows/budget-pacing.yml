@@ -1,0 +1,49 @@
+# Budget pacing to Slack every morning at 8:07am US Eastern. Read-only: no budget is changed.
+# Secrets: the Google Ads ones from search-terms-digest.yml, plus SLACK_WEBHOOK_PACING,
+# DIGEST_ACCOUNTS and BUDGET_TARGETS (agreed monthly budgets JSON, may be "{}").
+name: budget-pacing
+on:
+  schedule:
+    - cron: "7 12 * * *"   # 8am summer
+    - cron: "7 13 * * *"   # 8am winter
+  workflow_dispatch: {}
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+    steps:
+      - id: check
+        run: |
+          off=$(TZ=America/New_York date +%z)
+          case "${{ github.event.schedule }}|$off" in
+            "|"*|"7 12 * * *|-0400"|"7 13 * * *|-0500") echo "go=yes" >> "$GITHUB_OUTPUT";;
+            *) echo "go=no" >> "$GITHUB_OUTPUT"; echo "not this slot today";;
+          esac
+  pacing:
+    needs: gate
+    if: needs.gate.outputs.go == 'yes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Write the accounts and targets files
+        run: |
+          mkdir -p code/cache
+          printf '%s' "$DIGEST_ACCOUNTS" > code/cache/digest-accounts.json
+          printf '%s' "${BUDGET_TARGETS:-{\}}" > code/cache/budget-targets.json
+        env:
+          DIGEST_ACCOUNTS: ${{ secrets.DIGEST_ACCOUNTS }}
+          BUDGET_TARGETS: ${{ secrets.BUDGET_TARGETS }}
+      - name: Post the pacing update
+        run: python3 code/budget_pacing.py
+        env:
+          GOOGLE_ADS_CLIENT_ID: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+          GOOGLE_ADS_CLIENT_SECRET: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+          GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          GOOGLE_ADS_REFRESH_TOKEN_MCC: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN_MCC }}
+          SLACK_WEBHOOK_PACING: ${{ secrets.SLACK_WEBHOOK_PACING }}
