@@ -9,7 +9,9 @@ caps far above what they ever spend.
 
 Accounts file: the same one as search_terms_digest.py (code/cache/digest-accounts.json).
 Targets file (optional), default code/cache/budget-targets.json:
-  {"9639711048": 6000, "1169544260": 2500}     # account ID -> agreed monthly budget
+  {"9639711048": 6000, "1169544260": {"budget": 2000, "default": true}}
+  A plain number is the client's agreed monthly budget. {"budget": N, "default": true} is a
+  placeholder used until the agreed number is known, and is labelled "default" in Slack.
 
 Usage (from the project root, so .env resolves):
   python3 code/budget_pacing.py --dry-run      # print the Slack message, post nothing
@@ -76,14 +78,15 @@ def build(accounts, targets):
             errors.append(f"{acct['name']}: could not read ({type(e).__name__})")
             continue
         target = targets.get(acct["id"])
-        plan = float(target) if target else 0
+        is_default = isinstance(target, dict) and target.get("default", False)
+        plan = float(target["budget"] if isinstance(target, dict) else target) if target else 0
         projected = spend / elapsed * days_in if elapsed else 0
         if not plan:
             status = "no agreed budget"
         else:
             pct = projected / plan
             status = "under" if pct < UNDER else "over" if pct > OVER else "on pace"
-        rows.append(dict(name=acct["name"], spend=spend, projected=projected, plan=plan, last=last,
+        rows.append(dict(name=acct["name"], spend=spend, projected=projected, plan=plan, last=last, is_default=is_default,
                          daily=daily, status=status, limited=limited, cur=cur,
                          left_per_day=max(plan - spend, 0) / max(days_in - elapsed, 1)))
     icon = {"over": ":red_circle:", "under": ":large_yellow_circle:", "on pace": ":large_green_circle:", "no agreed budget": ":white_circle:"}
@@ -94,12 +97,16 @@ def build(accounts, targets):
     for r in rows:
         if r["plan"]:
             line = (f"{icon[r['status']]} *{r['name']}* · {money(r['spend'], r['cur'])} so far · "
-                    f"heading for {money(r['projected'], r['cur'])} of {money(r['plan'], r['cur'])} agreed")
+                    f"heading for {money(r['projected'], r['cur'])} of {money(r['plan'], r['cur'])}"
+                    f"{' default' if r['is_default'] else ' agreed'} · last month {money(r['last'], r['cur'])}")
         else:
             line = (f"{icon[r['status']]} *{r['name']}* · {money(r['spend'], r['cur'])} so far · "
                     f"heading for {money(r['projected'], r['cur'])} · last month {money(r['last'], r['cur'])}")
-        if r["status"] in ("over", "under"):
-            line += (f"\n      to land on the agreed budget: {money(r['left_per_day'], r['cur'])} a day from here, "
+        if r["plan"] and r["spend"] >= r["plan"]:
+            line += (f"\n      already {money(r['spend'] - r['plan'], r['cur'])} over the month's budget, "
+                     f"search budgets now {money(r['daily'], r['cur'])} a day")
+        elif r["status"] in ("over", "under"):
+            line += (f"\n      to land on budget: {money(r['left_per_day'], r['cur'])} a day from here, "
                      f"search budgets now {money(r['daily'], r['cur'])} a day")
         if r["limited"]:
             line += f"\n      limited by budget: {', '.join(r['limited'][:3])}"
@@ -108,11 +115,15 @@ def build(accounts, targets):
     head = (f":moneybag: *Budget pacing* · {first:%B} day {elapsed} of {days_in} · spend to {yesterday:%d %b}\n"
             f":red_circle: {counts['over']} over · :large_yellow_circle: {counts['under']} under · "
             f":large_green_circle: {counts['on pace']} on pace · :white_circle: {counts['no agreed budget']} with no agreed budget yet\n"
-            f"On pace means heading for 90 to 110% of the agreed monthly budget. Nothing has been changed.")
-    foot = ":white_circle: accounts show last month for comparison. Give Claude each client's agreed monthly budget to get a red, yellow or green light."
+            f"On pace means heading for 90 to 110% of the monthly budget. Nothing has been changed.")
+    foot = ""
+    if any(r["is_default"] for r in rows if r["plan"]):
+        foot = "\"default\" = a $2,000 placeholder until Claude has that client's agreed monthly budget."
+    if counts["no agreed budget"]:
+        foot += "\n:white_circle: accounts have no budget yet and show last month for comparison."
     if errors:
         foot += "\n" + "\n".join(f":x: {e}" for e in errors)
-    return f"{head}\n\n" + "\n".join(lines) + f"\n\n{foot}"
+    return f"{head}\n\n" + "\n".join(lines) + (f"\n\n{foot.strip()}" if foot.strip() else "")
 
 
 def post(text):
