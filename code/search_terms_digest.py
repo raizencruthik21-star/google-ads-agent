@@ -108,7 +108,7 @@ def date_window():
 
 
 def build(accounts, min_cost, per_account):
-    lines, total_review, errors = [], 0.0, []
+    lines, total_review, errors, quiet = [], 0.0, [], []
     for acct in accounts:
         try:
             terms = pull(acct)
@@ -120,7 +120,8 @@ def build(accounts, min_cost, per_account):
         review = [(k, v) for k, v in terms.items() if v["conv"] == 0 and v["cost"] >= min_cost]
         junk = [(k, v) for k, v in review if any(has_phrase(k, w) for w in JUNK_WORDS)]
         rest = [(k, v) for k, v in review if (k, v) not in junk]
-        if not review:
+        if not review:  # still named at the bottom, so every account is accounted for
+            quiet.append(f"{acct['name']} (${spend:,.0f})" if terms else f"{acct['name']} (no searches)")
             continue
         total_review += sum(v["cost"] for _, v in review)
         out = [f"*{acct['name']}* · ${spend:,.0f} spent · {leads:.0f} leads · {len(review)} to review"]
@@ -134,6 +135,9 @@ def build(accounts, min_cost, per_account):
             f"${total_review:,.0f} on searches with no lead yet, over ${min_cost:.0f} each. Nothing has been blocked.")
     body = "\n\n".join(lines) if lines else "Nothing over the threshold. All quiet."
     foot = "To block any of these, tell Claude \"add these\" with the account. It shows a dry run first."
+    if quiet:
+        foot = f"Nothing to review: {', '.join(quiet)}\n" + foot
+    foot = f"{len(accounts)} accounts checked.\n" + foot
     if errors:
         foot += "\n" + "\n".join(f":x: {e}" for e in errors)
     return f"{head}\n\n{body}\n\n{foot}"

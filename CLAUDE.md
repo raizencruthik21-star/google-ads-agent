@@ -173,7 +173,7 @@ When a task involves a tool a non-coder wouldn't know (Google Cloud Console, Ver
 - Connected: 14 October 2026
 - Login reaches: manager account Restoration Growth · 9644271246 · about 180 client accounts under it
 - Cloud project: subtle-arcade-511422-n4
-- Access level: at least Explorer (live accounts read fine) - Basic not yet confirmed
+- Access level: Basic - approved 21 October 2026 after brand verification (RG Ads Audit, restorationgrowth.com). Keyword Planner working
 - App published: yes - In production, External, confirmed 14 October 2026
 - GOOGLE_ADS_CUSTOMER_ID: not set yet, a client account is picked per run
 
